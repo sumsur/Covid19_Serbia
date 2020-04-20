@@ -1,0 +1,104 @@
+import pandas as pd
+import numpy as np #packages for importing data
+import matplotlib.pyplot as plt #package for plotting data
+from sklearn import linear_model
+from sklearn.metrics import max_error
+import math                             #packages for creating model
+from datetime import datetime
+from datetime import timedelta          #packages for attaching dates on prediction
+
+data = pd.read_excel(r'C:\Users\coronasrbija.xlsx') 
+tc = data['cases']
+tt = data['swabs']                      #extraxting the main columns
+y = []
+tt_increase = []
+print(data.head())
+
+for i in range(1, len(tt)):
+ current_epi = (tc[i]-tc[i-1])/(tt[i]-tt[i-1])*100
+ tt_increase.append(tt[i]-tt[i-1])
+ y.append(current_epi)
+
+
+X = []
+for i in range(1, len(y)+1):
+ X.append([i])
+
+ # vertical line corresponding to the beginning of restriction laws by the Gouvernment
+di = 14
+restrictions_x = [di,di,di,di,di,di,di]
+restrictions_y = [0,10,20,30,40,50,60]
+# vertical line corresponding to the beginning of effects of restriction laws (after 13 days)
+de = di + 13 #I assume it was 13 days after medic people could feel some changes.
+effects_x = [de,de,de,de,de,de,de]
+effects_y = [0,10,20,30,40,50,60]
+
+#CREATING MODEL. THE MAIN SENSE (1)
+plt.scatter(X, y, color='black')
+plt.plot(restrictions_x,restrictions_y, color='red', linewidth=2)
+plt.plot(effects_x,effects_y, color='green', linewidth=2)
+plt.grid()
+plt.xlabel('Days')
+plt.xlim(0,45)
+plt.ylim(0,60) #size of plot box
+plt.xticks([0,5,10,15,20,25,30,35,40],
+ ['6 mart', '11 mart','16 mart', '21 mart', '26 mart', '31 mart', '5 april', '10 april', '15 april', '19 april'])
+plt.ylabel('Epidemics Progression Index (EPI)')
+plt.savefig('EPI-all.png')
+plt.show()
+
+#FORECASTING. THE MAIN SENSE (2)
+X = X[de:]
+y = y[de:]
+print(X)
+# Linear Regression 
+linear_regr = linear_model.LinearRegression()
+# Train the model using the training sets
+linear_regr.fit(X, y)
+linear_regr.score(X,y)
+y_pred = linear_regr.predict(X)
+error = max_error(y, y_pred)
+
+X_test = []
+gp = 40
+for i in range(de, de + gp):
+ X_test.append([i])
+y_pred_linear = linear_regr.predict(X_test)
+
+y_pred_max = []
+y_pred_min = []
+for i in range(0, len(y_pred_linear)):
+ y_pred_max.append(y_pred_linear[i]+error)
+ y_pred_min.append(y_pred_linear[i]-error) #confidence interval
+
+
+ts = pd.to_datetime(str(data['date'][de])) 
+d = ts.strftime('%Y.%m.%B')
+data_eff =datetime.strptime(d, '%Y.%m.%B') #attaching dates on prediction model
+
+date_prev = []
+x_ticks = []
+step = 5
+data_curr = data_eff
+x_current = de
+n = int(gp/step)
+for i in range(0, n):
+ date_prev.append(str(data_curr.day) + '/' + str(data_curr.month))
+ x_ticks.append(x_current)
+ data_curr = data_curr + timedelta(days=step)
+ x_current = x_current + step
+
+
+plt.grid()
+plt.scatter(X, y, color='black')
+plt.plot(X_test, y_pred_linear, color='green', linewidth=2)
+plt.plot(X_test, y_pred_max, color='red', linewidth=1, linestyle='dashed')
+plt.plot(X_test, y_pred_min, color='red', linewidth=1, linestyle='dashed')
+plt.xlabel('Days')
+plt.xlim(de,de+gp)
+plt.xticks(x_ticks, date_prev)
+plt.ylabel('Epidemics Progression Index (EPI)')
+plt.yscale('log')
+plt.savefig('EPI-prediction.png')
+
+plt.show()
